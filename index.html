@@ -30,7 +30,7 @@ footer{flex:none;color:#969da4;padding:6px 18px;font:11px system-ui;border-top:1
 <main><div id="stage"><canvas id="game-ui" tabindex="0" aria-label="Interactive browser-local egui game interface"></canvas></div><div id="loading">Loading browser-local UI…</div></main>
 <footer>Production egui UI · Runs locally in WebAssembly · Disposable preview data · Shared visual preview · Changes stay in your browser session</footer>
 <script type="module">
-import init, {select_panel, rendered_frames, color_schemes, select_color_scheme, resize_viewport, viewport_width, viewport_height} from './pkg/ui_workshop.js';
+import init, {select_panel, rendered_frames, color_schemes, select_color_scheme, resize_viewport, viewport_width, viewport_height} from './pkg/ui_workshop.badccc4593a7568c.js';
 const names=['HUD','Inventory','Stats','Skills','PassiveTree','Social','Chat','Stash','Vendor','ZoneDevice','Settings','LootFilter','ModifierBrowser','Encyclopedia','EscapeMenu'];
 const nav=document.querySelector('nav');
 const more=document.createElement('details');
@@ -51,7 +51,15 @@ document.addEventListener('click',event=>{if(!more.contains(event.target))more.o
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&more.open){event.preventDefault();event.stopPropagation();more.open=false;summary.focus()}});
 const status=document.querySelector('#status'), loading=document.querySelector('#loading');
 const viewport=document.querySelector('#viewport'), stage=document.querySelector('#stage'), main=document.querySelector('main');
-let wasmReady=false;
+let wasmReady=false, failed=false;
+function reportError(error){
+  failed=true;wasmReady=false;
+  loading.hidden=false;
+  loading.style.whiteSpace='pre-wrap';loading.style.padding='24px';
+  loading.textContent=`The UI could not continue. Reload the page to restart.\n${error instanceof Error?error.message:String(error)}`;
+  status.textContent='UI stopped';
+  document.querySelectorAll('nav button,#scheme,#viewport').forEach(control=>control.disabled=true);
+}
 function fitPreview(){
   if(viewport.value==='fit'){
     Object.assign(stage.style,{width:'100%',height:'100%',left:'0px',top:'0px',transform:'none'});
@@ -67,9 +75,13 @@ function fitPreview(){
 viewport.onchange=fitPreview;
 new ResizeObserver(fitPreview).observe(main);
 
-window.addEventListener('error',e=>{loading.hidden=false;loading.textContent=e.message;status.textContent='UI error — see console'});
+window.addEventListener('error',e=>reportError(e.error??e.message));
+window.addEventListener('unhandledrejection',e=>reportError(e.reason));
 try {
-  const parts=await Promise.all(["./pkg/ui_workshop_bg.wasm.gz.0", "./pkg/ui_workshop_bg.wasm.gz.1"].map(async url=>{
+  const probe=document.createElement('canvas').getContext('webgl2');
+  if(!probe)throw new Error('WebGL2 is unavailable. Enable browser hardware acceleration or try another desktop browser.');
+  probe.getExtension('WEBGL_lose_context')?.loseContext();
+  const parts=await Promise.all(["./pkg/ui_workshop_bg.badccc4593a7568c.wasm.gz.0", "./pkg/ui_workshop_bg.badccc4593a7568c.wasm.gz.1"].map(async url=>{
     const response=await fetch(url);
     if(!response.ok)throw new Error(`UI download failed (${response.status})`);
     return response.arrayBuffer();
@@ -77,6 +89,7 @@ try {
   loading.textContent='Starting UI…';
   const moduleBytes=await new Response(new Blob(parts).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
   await init({module_or_path:moduleBytes});
+  if(failed)throw new Error(loading.textContent);
   wasmReady=true;fitPreview();
   const selector=document.querySelector('#scheme');
   const schemes=JSON.parse(color_schemes());
@@ -93,10 +106,11 @@ try {
   selector.onchange=applyScheme;
   let last=0, ready=false;
   setInterval(()=>{
+    if(failed)return;
     const frames=rendered_frames(), fps=frames-last;last=frames;
     if(frames && !ready){ready=true;loading.hidden=true;selector.disabled=false;document.querySelectorAll('nav button').forEach(b=>b.disabled=false)}
-    status.textContent=frames?`${viewport_width()} × ${viewport_height()} · ${fps} fps`:'Starting WebGPU…';
+    status.textContent=frames?`${viewport_width()} × ${viewport_height()} · ${fps} fps`:'Starting UI renderer…';
   },1000);
-} catch(error){loading.textContent=String(error);status.textContent='Failed to start UI';console.error(error)}
+} catch(error){reportError(error);console.error(error)}
 </script>
 </html>
