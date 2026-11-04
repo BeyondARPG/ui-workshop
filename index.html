@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beyond — egui UI workshop</title>
+<style>
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+:root{color-scheme:dark;--surface:#141414;--primary:#85b9c0;--secondary:#c9ab7b}
+body{display:flex;flex-direction:column;background:var(--surface);color:#dcdee1;font:12px system-ui}
+header{display:grid;grid-template-columns:auto auto 1fr auto auto;gap:10px 18px;padding:12px 18px;border-bottom:1px solid #373b3e;background:#191a1b;flex:none}
+strong{font:600 13px system-ui;letter-spacing:.7px;color:#e2e4e6;white-space:nowrap}
+.scheme{display:flex;align-items:center;gap:8px;white-space:nowrap;color:#a7adb2}select{max-width:165px}
+kbd{font:10px system-ui;color:#979fa6;margin-left:8px}details{position:relative}summary{list-style:none;cursor:pointer;padding:5px 9px;border:1px solid #3d4246;border-radius:2px;color:#bdc2c7;background:#232527}summary::-webkit-details-marker{display:none}.panel-menu{position:absolute;z-index:3;top:calc(100% + 5px);left:0;display:grid;grid-template-columns:1fr 1fr;gap:4px;min-width:300px;padding:8px;background:#1b1d1f;border:1px solid #4c5359;box-shadow:0 8px 20px #0006}.panel-menu button{text-align:left}summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+nav{grid-column:1/-1;grid-row:2;display:flex;flex-wrap:wrap;gap:4px}
+button,a,select{font:inherit;color:#bdc2c7;background:#232527;border:1px solid #3d4246;border-radius:2px;padding:5px 9px;text-decoration:none;cursor:pointer}
+button:hover,a:hover,select:hover{color:#edf0f2;background:#2d3235;border-color:var(--primary)}
+button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+button:disabled,select:disabled{opacity:.4;cursor:wait}
+#status{grid-column:4;grid-row:1;align-self:center;color:#9ca3aa;font-size:11px;white-space:nowrap}header>a{grid-column:5;grid-row:1}
+main{position:relative;flex:1;min-height:0;overflow:hidden;background:#090b0d}
+#stage{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:top left}
+#viewport-label{grid-column:3;grid-row:1;justify-self:end}
+@media(max-width:850px){#status,header>a{display:none}header{grid-template-columns:auto auto 1fr}}
+canvas{width:100%;height:100%;display:block;outline:none}
+footer{flex:none;color:#969da4;padding:6px 18px;font:11px system-ui;border-top:1px solid #373b3e;background:#191a1b}
+#loading{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;color:#bdc9ce}
+#loading[hidden]{display:none}#error{color:#e4a196;white-space:pre-wrap;padding:20px}
+@media(max-width:650px){header{grid-template-columns:auto 1fr auto;gap:8px}#status{grid-column:3}header>a{display:none}.scheme select{max-width:130px}}
+</style>
+<header><strong>BEYOND / UI</strong><label class="scheme">Palette <select id="scheme" disabled aria-label="Color scheme"></select></label><label class="scheme" id="viewport-label">Viewport <select id="viewport" aria-label="Preview viewport"><option value="fit">Fit window</option><option value="1280x720">1280 × 720 · 16:9</option><option value="1920x1080">1920 × 1080 · 16:9</option><option value="2560x1080">2560 × 1080 · ultrawide</option><option value="1024x768">1024 × 768 · 4:3</option><option value="900x900">900 × 900 · square</option><option value="720x1280">720 × 1280 · portrait</option></select></label><nav></nav><span id="status">Loading WebAssembly…</span><a href="./background.png" target="_blank">Level render ↗</a></header>
+<main><div id="stage"><canvas id="game-ui" tabindex="0" aria-label="Interactive browser-local egui game interface"></canvas></div><div id="loading">Loading browser-local UI…</div></main>
+<footer>Production egui UI · Runs locally in WebAssembly · Disposable preview data · Shared visual preview · Changes stay in your browser session</footer>
+<script type="module">
+import init, {select_panel, rendered_frames, color_schemes, select_color_scheme, resize_viewport, viewport_width, viewport_height} from './pkg/ui_workshop.js';
+const names=['HUD','Inventory','Stats','Skills','PassiveTree','Social','Chat','Stash','Vendor','ZoneDevice','Settings','LootFilter','ModifierBrowser','Encyclopedia','EscapeMenu'];
+const nav=document.querySelector('nav');
+const more=document.createElement('details');
+const summary=document.createElement('summary');summary.textContent='More panels ▾';more.append(summary);
+const menu=document.createElement('div');menu.className='panel-menu';more.append(menu);
+const primary=new Set(['HUD','Inventory','Stats','Skills','PassiveTree']);
+const labels={HUD:'Field',Inventory:'Inventory',Stats:'Character',Skills:'Skills',PassiveTree:'Passives'};
+const shortcuts={Inventory:'I',Stats:'C',Skills:'K',PassiveTree:'P'};
+for(const name of names){
+  const b=document.createElement('button');b.disabled=true;b.textContent=labels[name]??name.replace(/([a-z])([A-Z])/g,'$1 $2');
+  if(shortcuts[name]){const hint=document.createElement('kbd');hint.textContent=shortcuts[name];b.append(hint)}
+  b.setAttribute('aria-label',(labels[name]??b.textContent)+(shortcuts[name]?` (${shortcuts[name]})`:''));
+  b.onclick=()=>{select_panel(name);more.open=false;document.querySelector('canvas').focus()};
+  (primary.has(name)?nav:menu).append(b);
+}
+nav.append(more);
+document.addEventListener('click',event=>{if(!more.contains(event.target))more.open=false});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&more.open){event.preventDefault();event.stopPropagation();more.open=false;summary.focus()}});
+const status=document.querySelector('#status'), loading=document.querySelector('#loading');
+const viewport=document.querySelector('#viewport'), stage=document.querySelector('#stage'), main=document.querySelector('main');
+let wasmReady=false;
+function fitPreview(){
+  if(viewport.value==='fit'){
+    Object.assign(stage.style,{width:'100%',height:'100%',left:'0px',top:'0px',transform:'none'});
+    if(wasmReady&&main.clientWidth>0&&main.clientHeight>0)resize_viewport(main.clientWidth,main.clientHeight);
+    return;
+  }
+  const [width,height]=viewport.value.split('x').map(Number);
+  const scale=Math.min(main.clientWidth/width,main.clientHeight/height);
+  Object.assign(stage.style,{width:`${width}px`,height:`${height}px`,
+    left:`${(main.clientWidth-width*scale)/2}px`,top:`${(main.clientHeight-height*scale)/2}px`,transform:`scale(${scale})`});
+  if(wasmReady)resize_viewport(width,height);
+}
+viewport.onchange=fitPreview;
+new ResizeObserver(fitPreview).observe(main);
+
+window.addEventListener('error',e=>{loading.hidden=false;loading.textContent=e.message;status.textContent='UI error — see console'});
+try {
+  const parts=await Promise.all(["./pkg/ui_workshop_bg.wasm.gz.0", "./pkg/ui_workshop_bg.wasm.gz.1"].map(async url=>{
+    const response=await fetch(url);
+    if(!response.ok)throw new Error(`UI download failed (${response.status})`);
+    return response.arrayBuffer();
+  }));
+  loading.textContent='Starting UI…';
+  const moduleBytes=await new Response(new Blob(parts).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  await init({module_or_path:moduleBytes});
+  wasmReady=true;fitPreview();
+  const selector=document.querySelector('#scheme');
+  const schemes=JSON.parse(color_schemes());
+  for(const [name] of schemes){const option=document.createElement('option');option.value=name;option.textContent=name;selector.append(option)}
+  const applyScheme=()=>{
+    const [name,background,primary,secondary]=schemes.find(s=>s[0]===selector.value);
+    select_color_scheme(name);
+    for(const [key,value] of Object.entries({surface:background,primary,secondary}))document.documentElement.style.setProperty(`--${key}`,value);
+    try{localStorage.setItem('beyond-ui-scheme-v2',name)}catch{}
+  };
+  let saved;try{saved=localStorage.getItem('beyond-ui-scheme-v2')}catch{}
+  if(schemes.some(s=>s[0]===saved))selector.value=saved;
+  applyScheme();
+  selector.onchange=applyScheme;
+  let last=0, ready=false;
+  setInterval(()=>{
+    const frames=rendered_frames(), fps=frames-last;last=frames;
+    if(frames && !ready){ready=true;loading.hidden=true;selector.disabled=false;document.querySelectorAll('nav button').forEach(b=>b.disabled=false)}
+    status.textContent=frames?`${viewport_width()} × ${viewport_height()} · ${fps} fps`:'Starting WebGPU…';
+  },1000);
+} catch(error){loading.textContent=String(error);status.textContent='Failed to start UI';console.error(error)}
+</script>
+</html>
