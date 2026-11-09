@@ -30,7 +30,7 @@ footer{flex:none;color:#969da4;padding:6px 18px;font:11px system-ui;border-top:1
 <main><div id="stage"><canvas id="game-ui" tabindex="0" aria-label="Interactive browser-local egui game interface"></canvas></div><div id="loading">Loading browser-local UI…</div></main>
 <footer>Production egui UI · Runs locally in WebAssembly · Disposable preview data · Shared visual preview · Changes stay in your browser session</footer>
 <script type="module">
-import init, {select_panel, rendered_frames, color_schemes, select_color_scheme, resize_viewport, viewport_width, viewport_height} from './pkg/ui_workshop.277dcb7621f99b6d.js';
+import init, {select_panel, rendered_frames, color_schemes, select_color_scheme, resize_viewport, viewport_width, viewport_height} from './pkg/ui_workshop.d529cd3d6180f3b9.js';
 const names=['HUD','Inventory','Stats','Skills','PassiveTree','Social','Chat','Stash','Vendor','ZoneDevice','Settings','LootFilter','ModifierBrowser','Encyclopedia','EscapeMenu'];
 const nav=document.querySelector('nav');
 const more=document.createElement('details');
@@ -81,7 +81,7 @@ try {
   const probe=document.createElement('canvas').getContext('webgl2');
   if(!probe)throw new Error('WebGL2 is unavailable. Enable browser hardware acceleration or try another desktop browser.');
   probe.getExtension('WEBGL_lose_context')?.loseContext();
-  const parts=await Promise.all(["./pkg/ui_workshop_bg.277dcb7621f99b6d.wasm.gz.0", "./pkg/ui_workshop_bg.277dcb7621f99b6d.wasm.gz.1"].map(async url=>{
+  const parts=await Promise.all(["./pkg/ui_workshop_bg.d529cd3d6180f3b9.wasm.gz.0", "./pkg/ui_workshop_bg.d529cd3d6180f3b9.wasm.gz.1"].map(async url=>{
     const response=await fetch(url);
     if(!response.ok)throw new Error(`UI download failed (${response.status})`);
     return response.arrayBuffer();
